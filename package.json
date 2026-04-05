@@ -1,1 +1,7 @@
-{"name":"avatarlive-stripe","version":"1.0.0","main":"stripe_server.js","scripts":{"start":"node stripe_server.js"}} 
+{
+  "name": "avatarlive-stripe",
+  "version": "1.0.0",
+  "dependencies": {
+    "stripe": "^14.0.0"
+  }
+}
