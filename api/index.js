@@ -56,7 +56,7 @@ module.exports = async (req, res) => {
         payment_method_types: ['card'],
         customer_email: email || undefined,
         line_items: [{ price: price.id, quantity: 1 }],
-        success_url: 'https://TON-SITE.netlify.app/success.html?session_id={CHECKOUT_SESSION_ID}',
+        success_url: 'https://TON-SITE.netlify.app//success?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: 'https://avatarlive-stripedone.vercel.app/status',
         locale: 'fr',
       });
