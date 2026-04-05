@@ -7,6 +7,20 @@ const PLANS = {
 };
 
 module.exports = async (req, res) => {
+  // Parse le body JSON manuellement pour Vercel
+  if (req.method === 'POST' && typeof req.body === 'string') {
+    try { req.body = JSON.parse(req.body); } catch(e) {}
+  }
+  if (!req.body && req.method === 'POST') {
+    await new Promise((resolve) => {
+      let data = '';
+      req.on('data', chunk => data += chunk);
+      req.on('end', () => {
+        try { req.body = JSON.parse(data); } catch(e) { req.body = {}; }
+        resolve();
+      });
+    });
+  }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -42,7 +56,7 @@ module.exports = async (req, res) => {
         payment_method_types: ['card'],
         customer_email: email || undefined,
         line_items: [{ price: price.id, quantity: 1 }],
-        success_url: 'https://https://chipper-crostata-ee5e43.netlify.app/success.html?session_id={CHECKOUT_SESSION_ID}',
+        success_url: 'https://TON-SITE.netlify.app/success.html?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: 'https://avatarlive-stripedone.vercel.app/status',
         locale: 'fr',
       });
