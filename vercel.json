@@ -1,0 +1,1 @@
+{"version":2,"builds":[{"src":"stripe_server.js","use":"@vercel/node"}],"routes":[{"src":"/(.*)","dest":"stripe_server.js"}]}
