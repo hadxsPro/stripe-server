@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
         payment_method_types: ['card'],
         customer_email: email || undefined,
         line_items: [{ price: price.id, quantity: 1 }],
-        success_url: 'https://avatarlive-stripedone.vercel.app/status',
+        success_url: 'https://avatarlive-stripedone.netlify.app/success.html?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: 'https://avatarlive-stripedone.vercel.app/status',
         locale: 'fr',
       });
