@@ -1,13 +1,54 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const https = require('https');
 
+const JSONBIN_ID = '69d28277aaba882197c886d1';
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
 const PLANS = {
   free: { name: 'Gratuit', price: 0 },
   pro_monthly: { name: 'Pro Mensuel', price: 999, currency: 'eur', interval: 'month' },
   pro_annual: { name: 'Pro Annuel', price: 7999, currency: 'eur', interval: 'year' },
 };
 
-// File de commandes en mémoire (par session)
-const commandQueue = {};
+function jsonbinRequest(method, data) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.jsonbin.io',
+      path: `/v3/b/${JSONBIN_ID}`,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY,
+        'X-Bin-Versioning': 'false',
+      }
+    };
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch(e) { resolve({}); }
+      });
+    });
+    req.on('error', reject);
+    if (data) req.write(JSON.stringify(data));
+    req.end();
+  });
+}
+
+async function getCommands() {
+  const res = await jsonbinRequest('GET');
+  return res.record?.commands || [];
+}
+
+async function addCommand(cmd) {
+  const commands = await getCommands();
+  commands.push({ ...cmd, ts: Date.now() });
+  if (commands.length > 20) commands.splice(0, commands.length - 20);
+  await jsonbinRequest('PUT', { commands });
+}
+
+async function clearCommands() {
+  await jsonbinRequest('PUT', { commands: [] });
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,7 +56,6 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Parse body
   if (req.method === 'POST' && typeof req.body === 'string') {
     try { req.body = JSON.parse(req.body); } catch(e) {}
   }
@@ -32,37 +72,36 @@ module.exports = async (req, res) => {
 
   const path = req.url.split('?')[0];
 
-  // ── STATUS ──
   if (path === '/status' && req.method === 'GET') {
     return res.json({ status: 'running', mode: 'test' });
   }
 
-  // ── PLANS ──
   if (path === '/plans' && req.method === 'GET') {
     return res.json({ plans: PLANS });
   }
 
-  // ── MOBILE → envoie une commande au PC ──
+  // Mobile envoie une commande
   if (path === '/command' && req.method === 'POST') {
-    const { session, type, text, style } = req.body;
-    if (!session) return res.status(400).json({ error: 'session requise' });
-    if (!commandQueue[session]) commandQueue[session] = [];
-    commandQueue[session].push({ type, text, style, ts: Date.now() });
-    // Garde max 10 commandes
-    if (commandQueue[session].length > 10) commandQueue[session].shift();
-    return res.json({ status: 'queued' });
+    try {
+      const { type, text, style } = req.body;
+      await addCommand({ type, text, style });
+      return res.json({ status: 'queued' });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
 
-  // ── PC → récupère les commandes en attente ──
+  // PC récupère et vide les commandes
   if (path === '/poll' && req.method === 'GET') {
-    const session = req.url.split('session=')[1];
-    if (!session) return res.status(400).json({ error: 'session requise' });
-    const commands = commandQueue[session] || [];
-    commandQueue[session] = []; // Vide la file après lecture
-    return res.json({ commands });
+    try {
+      const commands = await getCommands();
+      if (commands.length > 0) await clearCommands();
+      return res.json({ commands });
+    } catch(e) {
+      return res.status(500).json({ commands: [], error: e.message });
+    }
   }
 
-  // ── STRIPE CHECKOUT ──
   if (path === '/create-checkout' && req.method === 'POST') {
     const { plan, email } = req.body;
     if (!plan || plan === 'free') return res.json({ url: null, plan: 'free' });
@@ -91,7 +130,6 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ── VERIFY ──
   if (path.startsWith('/verify/') && req.method === 'GET') {
     const sessionId = path.split('/verify/')[1];
     try {
